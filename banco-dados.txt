@@ -1,0 +1,148 @@
+--**********************************************************-
+select * from dim_names
+
+select * from dim_atuam
+
+select * from facts_movie
+
+select * from dim_genres
+
+select * from facts_score
+
+select * from movies
+go
+--__________________________________________________________________________--
+--1Criar uma consulta para listar todos os filmes de um determinado gênero.
+
+SELECT m.movie_title, m.title_year
+FROM movies m
+JOIN dim_genres g ON m.id_title = g.id_title
+WHERE g.Valor = 'Ação'; -- Substitua 'Ação' pelo gênero desejado
+
+--2Criar uma consulta para listar os filmes com a maior duração.
+SELECT TOP 10 movie_title, duration
+FROM facts_movie
+ORDER BY duration DESC;
+
+
+--3Criar uma consulta para contar quantos filmes foram lançados por ano, excluindo os anos sem filmes.
+SELECT title_year, COUNT(*) AS NumFilmes
+FROM movies
+WHERE title_year IS NOT NULL
+GROUP BY title_year
+ORDER BY title_year;
+
+
+--4Criar uma consulta para listar os atores com mais curtidas no Facebook em ordem decrescente.
+SELECT Actor, Facebook_likes
+FROM dim_names
+ORDER BY Facebook_likes DESC;
+
+
+--5Criar uma consulta para calcular o lucro médio de todos os filmes.
+SELECT AVG(gross - budget) AS LucroMedio
+FROM facts_movie
+WHERE gross IS NOT NULL AND budget IS NOT NULL;
+
+--
+
+
+-------------------------------------------VIEW------------------------------------------------
+
+--FilmesPorAno: Lista a quantidade de filmes lançados por ano.
+CREATE VIEW FilmesPorAno AS
+SELECT title_year, COUNT(*) AS NumFilmes
+FROM movies
+GROUP BY title_year;
+
+SELECT * FROM FilmesPorAno
+
+
+--MediaDuracaoPorAno: Lista a média de duração dos filmes em minutos lançados por ano, excluindo aqueles sem a informação da duração (null).
+CREATE VIEW MediaDuracaoPorAno AS
+SELECT title_year, AVG(duration) AS MedDuracao
+FROM movies
+WHERE duration IS NOT NULL
+GROUP BY title_year;
+
+--FilmesAdrianPaul: Lista os filmes do ator "Adrian Paul" com suas respectivas informações.
+CREATE VIEW FilmesAdrianPaul AS
+SELECT m.movie_title, m.title_year, n.actor AS ator
+FROM movies m
+JOIN dim_atuam a ON m.id_title = a.id_title
+JOIN dim_names n ON n.id_names = a.id_names
+WHERE n.actor = 'Adrian Paul';
+
+select * from FilmesAdrianPaul
+
+-------------------------------------------Procedure--------------------------------------
+
+--BuscarAtores: Procedimento que retorna todos os atores com uma string no nome, ordenados pelo número de likes no Facebook em ordem decrescente.
+CREATE PROCEDURE BuscarAtores (@nome_ator VARCHAR(40))
+AS
+BEGIN
+    SELECT *
+    FROM dim_names
+    WHERE actor LIKE '%' + @nome_ator + '%'
+    ORDER BY Facebook_likes DESC;
+END;
+
+EXEC BuscarAtores 'Paul';
+
+--BuscarFilmesAtor: Procedimento que retorna todos os filmes de um determinado ator, ordenados por ano de lançamento.
+CREATE PROCEDURE BuscarFilmesAtor (@nome_ator VARCHAR(40))
+AS
+BEGIN
+    SELECT m.movie_title, m.title_year, n.actor AS ator
+    FROM movies m
+    JOIN dim_atuam a ON m.id_title = a.id_title
+    JOIN dim_names n ON n.id_names = a.id_names
+    WHERE n.actor = @nome_ator
+    ORDER BY m.title_year;
+END;
+
+EXEC BuscarFilmesAtor 'Tom Cruise';
+
+------------------------------------------TRIGGERS-----------------------------------------------
+--AtualizarLucro: Trigger que atualiza o lucro de um filme sempre que o orçamento ou a receita bruta são atualizados na tabela facts_movie.
+ALTER TABLE facts_movie
+ADD lucro INT; -- Você pode ajustar o tipo de dados conforme necessário
+
+-- Criar o trigger 'AtualizarLucro'
+CREATE TRIGGER AtualizarLucro
+ON facts_movie
+AFTER UPDATE
+AS
+BEGIN
+    -- Atualizar a coluna 'lucro' com base nos valores de 'gross' e 'budget'
+    UPDATE facts_movie
+    SET lucro = gross - budget;
+END;
+EXEC sp_columns 'facts_movie';
+
+------------------------------------------FUNCTION---------------------------------------------
+-- Pergunta: Como posso calcular a média de avaliação de um filme com base no número de críticas de usuários?
+
+CREATE FUNCTION CalcularMediaAvaliacaoPorID(@id_title INT)
+RETURNS FLOAT
+AS
+BEGIN
+    DECLARE @media FLOAT;
+
+    SELECT @media = AVG(imdb_score)
+    FROM facts_score
+    WHERE id_title = @id_title AND num_user_for_reviews > 0;
+
+    RETURN @media;
+END;
+
+SELECT dbo.CalcularMediaAvaliacaoPorID(6) AS MediaAvaliacaoParaID6;
+
+
+--DROP VIEW FilmesporAno;
+--DROP VIEW MediaDuracaoporAno;
+--DROP VIEW FilmesTomCruise;
+--DROP PROCEDURE sp_atores;
+--DROP PROCEDURE sp_FilmesdoAtor;
+--DROP FUNCTION Lucro;
+--DROP FUNCTION filmes;
